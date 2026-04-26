@@ -5,10 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="manifest" href="/static/manifest.json">
   <meta name="theme-color" content="#0f0f0f">
+  <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Kal Track">
   <link rel="apple-touch-icon" href="/static/icon-192.png">
-  <title>Cal Tracker</title>
+  <link rel="apple-touch-icon" sizes="192x192" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="/static/icon-512.png">
+  <title>Calorie Tracker</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -241,11 +245,33 @@
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Install button */
+    .install-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-bottom: 24px;
+      display: none;
+    }
+
+    .install-btn.show {
+      display: block;
+    }
   </style>
 </head>
 <body>
 
-  <h1>🥗 Cal Tracker</h1>
+  <h1>🥗 Calorie Tracker</h1>
+
+  <!-- Install button (Android) -->
+  <button class="install-btn" id="install-btn">📱 Install App</button>
 
   <!-- Counter -->
   <div class="counter">
@@ -273,7 +299,7 @@
   <!-- Input -->
   <div class="input-section">
     <div class="input-row">
-      <input type="text" id="food-input" placeholder="e.g. McAloo Tikki, Diet Coke" />
+      <input type="text" id="food-input" placeholder="e.g. 55 Samosas, Diet Coke" />
       <button class="submit-btn" id="submit-btn" onclick="logFood()">Add</button>
     </div>
     <div class="error-msg" id="error-msg"></div>
@@ -432,6 +458,7 @@
     fetchToday();
   </script>
   <script>
+  // Service Worker registration
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/static/sw.js')
@@ -439,6 +466,40 @@
         .catch(err => console.error('SW failed:', err));
     });
   }
+
+  // PWA Install prompt (Android)
+  let deferredPrompt;
+  const installBtn = document.getElementById('install-btn');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent the mini-infobar from appearing on mobile
+    e.preventDefault();
+    // Stash the event so it can be triggered later
+    deferredPrompt = e;
+    // Show install button
+    installBtn.classList.add('show');
+  });
+
+  installBtn.addEventListener('click', async () => {
+    if (!deferredPrompt) {
+      return;
+    }
+    // Show the install prompt
+    deferredPrompt.prompt();
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to the install prompt: ${outcome}`);
+    // Clear the deferredPrompt
+    deferredPrompt = null;
+    // Hide the install button
+    installBtn.classList.remove('show');
+  });
+
+  // Hide install button if already installed
+  window.addEventListener('appinstalled', () => {
+    installBtn.classList.remove('show');
+    deferredPrompt = null;
+  });
   </script>
 </body>
 </html>

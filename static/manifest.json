@@ -1,20 +1,25 @@
 {
-  "name": "Cal Tracker",
-  "short_name": "Calories",
+  "name": "Calorie Tracker",
+  "short_name": "Kal Track",
+  "description": "Track your daily calorie intake",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#0f0f0f",
   "theme_color": "#0f0f0f",
   "icons": [
     {
       "src": "/static/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/static/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
