@@ -1,12 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class LogRequest(BaseModel):
-    text: str
-    device_id: str
-
-class TargetRequest(BaseModel):
-    target: int
-    device_id: str
-
-class DeviceRequest(BaseModel):
-    device_id: str
+    text: str = Field(..., max_length=200)
