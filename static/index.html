@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#0f0f0f">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <title>Cal Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      min-height: 100vh;
+      padding: 24px 16px;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #888;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 28px;
+    }
+
+    /* --- Counter --- */
+    .counter {
+      background: #1a1a1a;
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 24px;
+      text-align: center;
+    }
+
+    .counter-label {
+      font-size: 0.75rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 8px;
+    }
+
+    .counter-main {
+      font-size: 3rem;
+      font-weight: 700;
+      line-height: 1;
+      color: #fff;
+    }
+
+    .counter-main span {
+      font-size: 1.1rem;
+      font-weight: 400;
+      color: #555;
+    }
+
+    .counter-target {
+      font-size: 0.85rem;
+      color: #555;
+      margin-top: 8px;
+    }
+
+    .progress-bar-bg {
+      background: #2a2a2a;
+      border-radius: 99px;
+      height: 6px;
+      margin-top: 16px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: #4ade80;
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+
+    .progress-bar-fill.warning { background: #facc15; }
+    .progress-bar-fill.over    { background: #f87171; }
+
+    /* --- Input --- */
+    .input-section {
+      margin-bottom: 24px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 1rem;
+      color: #f0f0f0;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: #4ade80;
+    }
+
+    input[type="text"]::placeholder { color: #444; }
+
+    button.submit-btn {
+      background: #4ade80;
+      color: #0f0f0f;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 20px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      white-space: nowrap;
+    }
+
+    button.submit-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .error-msg {
+      color: #f87171;
+      font-size: 0.85rem;
+      margin-top: 10px;
+      min-height: 1.2em;
+    }
+
+    .success-msg {
+      color: #4ade80;
+      font-size: 0.85rem;
+      margin-top: 10px;
+      min-height: 1.2em;
+    }
+
+    /* --- Target edit --- */
+    .target-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .target-row label {
+      font-size: 0.8rem;
+      color: #555;
+      white-space: nowrap;
+    }
+
+    .target-row input[type="number"] {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 0.85rem;
+      color: #f0f0f0;
+      width: 90px;
+      outline: none;
+    }
+
+    .target-row button {
+      background: #2a2a2a;
+      color: #aaa;
+      border: none;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    /* --- Log --- */
+    .log-header {
+      font-size: 0.75rem;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+
+    .log-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .log-item {
+      background: #1a1a1a;
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .log-item-name {
+      font-size: 0.95rem;
+      color: #e0e0e0;
+      text-transform: capitalize;
+    }
+
+    .log-item-count {
+      font-size: 0.75rem;
+      color: #555;
+      margin-top: 2px;
+    }
+
+    .log-item-cal {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #4ade80;
+    }
+
+    .empty-log {
+      color: #333;
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 32px 0;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #0f0f0f;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <h1>🥗 Cal Tracker</h1>
+
+  <!-- Counter -->
+  <div class="counter">
+    <div class="counter-label">Today</div>
+    <div class="counter-main">
+      <span id="cal-consumed">0</span>
+      <span> / </span>
+      <span id="cal-target">2000</span>
+      <span> kcal</span>
+    </div>
+    <div class="counter-target" id="remaining-label">2000 kcal remaining</div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" id="progress-fill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- Target edit -->
+  <div class="target-row">
+    <label>Daily target:</label>
+    <input type="number" id="target-input" value="2000" min="500" max="9999" />
+    <button onclick="updateTarget()">Set</button>
+  </div>
+
+  <!-- Input -->
+  <div class="input-section">
+    <div class="input-row">
+      <input type="text" id="food-input" placeholder="e.g. McAloo Tikki, Diet Coke" />
+      <button class="submit-btn" id="submit-btn" onclick="logFood()">Add</button>
+    </div>
+    <div class="error-msg" id="error-msg"></div>
+    <div class="success-msg" id="success-msg"></div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-header">Today's Log</div>
+  <div class="log-list" id="log-list">
+    <div class="empty-log">Nothing logged yet.</div>
+  </div>
+
+  <script>
+    let currentTarget = 2000;
+
+    async function fetchToday() {
+      try {
+        const res = await fetch('/today');
+        const data = await res.json();
+        currentTarget = data.target;
+        document.getElementById('target-input').value = data.target;
+        renderCounter(data.total, data.target);
+        renderLog(data.log);
+      } catch (e) {
+        console.error('Failed to fetch today:', e);
+      }
+    }
+
+    function renderCounter(consumed, target) {
+      document.getElementById('cal-consumed').textContent = consumed;
+      document.getElementById('cal-target').textContent = target;
+
+      const remaining = target - consumed;
+      const label = document.getElementById('remaining-label');
+      label.textContent = remaining >= 0
+        ? `${remaining} kcal remaining`
+        : `${Math.abs(remaining)} kcal over target`;
+
+      const pct = Math.min((consumed / target) * 100, 100);
+      const fill = document.getElementById('progress-fill');
+      fill.style.width = pct + '%';
+      fill.className = 'progress-bar-fill';
+      if (consumed / target >= 1)       fill.classList.add('over');
+      else if (consumed / target >= 0.85) fill.classList.add('warning');
+    }
+
+    function renderLog(log) {
+      const list = document.getElementById('log-list');
+      const entries = Object.entries(log);
+
+      if (entries.length === 0) {
+        list.innerHTML = '<div class="empty-log">Nothing logged yet.</div>';
+        return;
+      }
+
+      list.innerHTML = entries.map(([name, val]) => `
+        <div class="log-item">
+          <div>
+            <div class="log-item-name">${name}</div>
+            <div class="log-item-count">× ${val.count} · ${val.calories} kcal each</div>
+          </div>
+          <div class="log-item-cal">${val.calories * val.count} kcal</div>
+        </div>
+      `).join('');
+    }
+
+    async function logFood() {
+      const input = document.getElementById('food-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const btn = document.getElementById('submit-btn');
+      const errorEl = document.getElementById('error-msg');
+      const successEl = document.getElementById('success-msg');
+
+      errorEl.textContent = '';
+      successEl.textContent = '';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>';
+
+      try {
+        const res = await fetch('/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorEl.textContent = data.detail || 'Something went wrong.';
+          return;
+        }
+
+        input.value = '';
+        const itemNames = data.items.map(i => `${i.item} (${i.calories_per_unit * i.qty} kcal)`).join(', ');
+        successEl.textContent = `+${data.total_added} kcal — ${itemNames}`;
+        renderCounter(
+          Object.values(data.today).reduce((s, v) => s + v.calories * v.count, 0),
+          currentTarget
+        );
+        renderLog(data.today);
+
+      } catch (e) {
+        errorEl.textContent = 'Network error. Is the server running?';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Add';
+      }
+    }
+
+    async function updateTarget() {
+      const val = parseInt(document.getElementById('target-input').value);
+      if (!val || val < 500) return;
+      await fetch('/target', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: val })
+      });
+      currentTarget = val;
+      await fetchToday();
+    }
+
+    document.getElementById('food-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') logFood();
+    });
+
+    fetchToday();
+  </script>
+  <script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(reg => console.log('SW registered:', reg.scope))
+        .catch(err => console.error('SW failed:', err));
+    });
+  }
+  </script>
+</body>
+</html>
