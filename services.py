@@ -1,14 +1,14 @@
 import json, os
 from groq import Groq
 from dotenv import load_dotenv
-from storage import load_data, save_data, load_config, save_config, today_key
+from storage import get_device_data, save_device_data, get_device_config, save_device_config, today_key
 
 load_dotenv()
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 
-def log_food_service(text: str):
+def log_food_service(text: str, device_id: str):
     prompt = f"""You are a nutrition expert specializing in Indian food and cuisine.
 The user ate: "{text}"
 
@@ -48,7 +48,7 @@ Rules:
     if not result.get("identified") or not result.get("items"):
         raise ValueError("Could not identify any food items. Please try again.")
 
-    data = load_data()
+    data = get_device_data(device_id)
     today = today_key()
 
     if today not in data:
@@ -64,7 +64,7 @@ Rules:
         else:
             data[today][item] = {"calories": cal, "count": qty}
 
-    save_data(data)
+    save_device_data(device_id, data)
 
     total_added = sum(e["calories_per_unit"] * e["qty"] for e in result["items"])
 
@@ -75,10 +75,10 @@ Rules:
     }
 
 
-def get_today_service():
-    data = load_data()
+def get_today_service(device_id: str):
+    data = get_device_data(device_id)
     today = today_key()
-    config = load_config()
+    config = get_device_config(device_id)
 
     today_data = data.get(today, {})
     total = sum(v["calories"] * v["count"] for v in today_data.values())
@@ -91,15 +91,15 @@ def get_today_service():
     }
 
 
-def update_target_service(target: int):
-    config = load_config()
+def update_target_service(target: int, device_id: str):
+    config = get_device_config(device_id)
     config["target"] = target
-    save_config(config)
+    save_device_config(device_id, config)
     return {"target": target}
 
 
-def reset_today_service():
-    data = load_data()
+def reset_today_service(device_id: str):
+    data = get_device_data(device_id)
     data[today_key()] = {}
-    save_data(data)
+    save_device_data(device_id, data)
     return {"message": "Today's log cleared"}

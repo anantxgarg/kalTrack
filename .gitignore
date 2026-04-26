@@ -4,3 +4,4 @@ config.json
 .venv/
 data.json
 config.json
+.vscode

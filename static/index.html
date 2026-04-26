@@ -267,6 +267,7 @@
     <label>Daily target:</label>
     <input type="number" id="target-input" value="2000" min="500" max="9999" />
     <button onclick="updateTarget()">Set</button>
+    <button onclick="resetToday()" style="margin-left: 8px; background: #dc2626; color: white;">Reset</button>
   </div>
 
   <!-- Input -->
@@ -287,10 +288,26 @@
 
   <script>
     let currentTarget = 2000;
+    let deviceId = null;
+
+    // Generate or retrieve device ID
+    function getDeviceId() {
+      let id = localStorage.getItem('kaltrack_device_id');
+      if (!id) {
+        // Generate unique device ID
+        id = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('kaltrack_device_id', id);
+      }
+      return id;
+    }
 
     async function fetchToday() {
       try {
-        const res = await fetch('/today');
+        const res = await fetch('/today', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_id: deviceId })
+        });
         const data = await res.json();
         currentTarget = data.target;
         document.getElementById('target-input').value = data.target;
@@ -357,7 +374,7 @@
         const res = await fetch('/log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
+          body: JSON.stringify({ text, device_id: deviceId })
         });
 
         const data = await res.json();
@@ -390,9 +407,19 @@
       await fetch('/target', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: val })
+        body: JSON.stringify({ target: val, device_id: deviceId })
       });
       currentTarget = val;
+      await fetchToday();
+    }
+
+    async function resetToday() {
+      if (!confirm('Clear today\'s log?')) return;
+      await fetch('/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device_id: deviceId })
+      });
       await fetchToday();
     }
 
@@ -400,6 +427,8 @@
       if (e.key === 'Enter') logFood();
     });
 
+    // Initialize device ID and load data
+    deviceId = getDeviceId();
     fetchToday();
   </script>
   <script>
