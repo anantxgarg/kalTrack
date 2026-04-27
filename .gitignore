@@ -5,3 +5,5 @@ config.json
 data.json
 config.json
 .vscode
+data/nutrition_cache.db
+test*

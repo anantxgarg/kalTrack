@@ -14,6 +14,8 @@
   <link rel="apple-touch-icon" sizes="192x192" href="/static/icon-192.png">
   <link rel="apple-touch-icon" sizes="512x512" href="/static/icon-512.png">
   <title>Calorie Tracker</title>
+  <!-- ZXing for barcode scanning -->
+  <script src="https://unpkg.com/@zxing/library@latest"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -285,6 +287,193 @@
       }
     }
 
+    /* --- Scan button --- */
+    button.scan-btn {
+      background: rgba(74, 222, 128, 0.1);
+      color: #4ade80;
+      border: 1px solid rgba(74, 222, 128, 0.3);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.2s, color 0.2s;
+      flex-shrink: 0;
+    }
+
+    button.scan-btn:hover {
+      background: #4ade80;
+      color: #0f0f0f;
+    }
+
+    /* --- Premium Barcode Modal --- */
+    #barcode-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(10, 10, 10, 0.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    #barcode-modal.open {
+      display: flex;
+      opacity: 1;
+    }
+
+    .modal-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .modal-title {
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .close-btn {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.2rem;
+      transition: background 0.2s;
+    }
+
+    .close-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .scanner-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 400px;
+      aspect-ratio: 3/4;
+      margin: 0 auto;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+      background: #000;
+    }
+
+    #barcode-reader {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 28px;
+      overflow: hidden;
+    }
+
+    #scanner-video {
+      object-fit: cover;
+      width: 100%;
+      height: 100%;
+    }
+
+    .scan-guide {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 75%;
+      height: 140px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 16px;
+      box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.5);
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .scan-guide::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #4ade80;
+      box-shadow: 0 0 12px 2px rgba(74, 222, 128, 0.8);
+      animation: scan-line 2s infinite linear;
+    }
+
+    @keyframes scan-line {
+      0% { top: 0; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    .scanner-footer {
+      position: absolute;
+      bottom: 40px;
+      left: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      z-index: 10;
+      padding: 0 24px;
+    }
+
+    #barcode-status {
+      font-size: 0.95rem;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 20px;
+      border-radius: 20px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .file-upload-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      padding: 14px 24px;
+      border-radius: 16px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .file-upload-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
     /* Install button */
     .install-btn {
       background: #2563eb;
@@ -340,6 +529,7 @@
   <div class="input-section">
     <div class="input-row">
       <input type="text" id="food-input" placeholder="e.g. 55 Samosas, Diet Coke" />
+      <button class="scan-btn" id="scan-btn" onclick="openBarcodeScanner()" title="Scan barcode">📷 Scan</button>
       <button class="submit-btn" id="submit-btn" onclick="logFood()">Add</button>
     </div>
     <div class="error-msg" id="error-msg"></div>
@@ -350,6 +540,34 @@
   <div class="log-header">Today's Log</div>
   <div class="log-list" id="log-list">
     <div class="empty-log">Nothing logged yet.</div>
+  </div>
+
+  <!-- Barcode scanner modal -->
+  <div id="barcode-modal" role="dialog" aria-modal="true" aria-label="Barcode Scanner">
+    <div class="modal-header">
+      <div class="modal-title">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h3"/><path d="M20 7V4h-3"/><path d="M4 17v3h3"/><path d="M20 17v3h-3"/><path d="M9 10h.01"/><path d="M15 10h.01"/><path d="M12 14h.01"/></svg>
+        Scan Barcode
+      </div>
+      <button class="close-btn" onclick="closeBarcodeScanner()" aria-label="Close">✕</button>
+    </div>
+    
+    <div class="scanner-wrapper">
+      <div id="barcode-reader">
+        <video id="scanner-video"></video>
+      </div>
+      <div class="scan-guide"></div>
+    </div>
+    
+    <div class="scanner-footer">
+      <div id="barcode-status">Initializing camera...</div>
+      
+      <label class="file-upload-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        Upload Photo Instead
+        <input type="file" accept="image/*" capture="environment" style="display: none;" onchange="scanBarcodeFile(event)">
+      </label>
+    </div>
   </div>
 
   <script>
@@ -481,14 +699,17 @@
           if (state.log[name]) {
             state.log[name].count += item.qty;
           } else {
-            state.log[name] = { count: item.qty, calories: item.calories_per_unit };
+            state.log[name] = { count: item.qty, calories: item.calories_per_unit, source: item.source };
           }
         }
 
         saveState();
         renderAll();
 
-        const itemNames = data.items.map(i => `${i.item} (${i.calories_per_unit * i.qty} kcal)`).join(', ');
+        const itemNames = data.items.map(i => {
+            const sourceInfo = i.source ? ` [${i.source}]` : '';
+            return `${i.item} (${i.calories_per_unit * i.qty} kcal)${sourceInfo}`;
+        }).join(', ');
         successEl.textContent = `+${data.total_added} kcal — ${itemNames}`;
 
       } catch (e) {
@@ -517,6 +738,134 @@
     document.getElementById('food-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') logFood();
     });
+
+    // --- Barcode Scanner (ZXing) ---
+    let zxingReader = null;
+    let isScanning = false;
+
+    function getZXingReader() {
+      if (zxingReader) return zxingReader;
+      
+      const hints = new Map();
+      const formats = [
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.UPC_E,
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.CODE_39,
+        ZXing.BarcodeFormat.ITF
+      ];
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, formats);
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      
+      zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+      return zxingReader;
+    }
+
+    async function openBarcodeScanner() {
+      const modal = document.getElementById('barcode-modal');
+      const statusEl = document.getElementById('barcode-status');
+      const videoElement = document.getElementById('scanner-video');
+      
+      // Reset state
+      modal.style.display = 'flex';
+      // Trigger reflow for animation
+      void modal.offsetWidth;
+      modal.classList.add('open');
+      statusEl.textContent = 'Initializing camera...';
+      document.querySelector('.scan-guide').style.display = 'block';
+
+      const reader = getZXingReader();
+
+      try {
+        isScanning = true;
+        
+        // Start decoding from constraints
+        await reader.decodeFromConstraints(
+          { 
+            video: { 
+              facingMode: 'environment', 
+              width: { ideal: 1280 }, 
+              height: { ideal: 720 } 
+            } 
+          },
+          videoElement,
+          (result, err) => {
+            if (result && isScanning) {
+              isScanning = false; // Stop accepting frames immediately
+              
+              if (navigator.vibrate) navigator.vibrate(200);
+              document.querySelector('.scan-guide').style.display = 'none';
+              statusEl.textContent = `✅ Scanned: ${result.getText()}`;
+              
+              // Brief pause for user feedback
+              setTimeout(async () => {
+                  await closeBarcodeScanner();
+                  const input = document.getElementById('food-input');
+                  input.value = result.getText().trim();
+                  logFood();
+              }, 600);
+            }
+          }
+        );
+        statusEl.textContent = 'Point at a product barcode';
+      } catch (err) {
+        console.error("Camera error:", err);
+        document.querySelector('.scan-guide').style.display = 'none';
+        statusEl.innerHTML = `<span style="color: #f87171;">Camera blocked or unavailable.</span>`;
+      }
+    }
+
+    async function scanBarcodeFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const statusEl = document.getElementById('barcode-status');
+      statusEl.textContent = 'Scanning image...';
+      document.querySelector('.scan-guide').style.display = 'none';
+      
+      try {
+        const reader = getZXingReader();
+        
+        const img = new Image();
+        img.onload = async () => {
+           try {
+               const result = await reader.decodeFromImageElement(img);
+               if (navigator.vibrate) navigator.vibrate(200);
+               statusEl.textContent = `✅ Scanned: ${result.getText()}`;
+               
+               setTimeout(async () => {
+                 await closeBarcodeScanner();
+                 const input = document.getElementById('food-input');
+                 input.value = result.getText().trim();
+                 logFood();
+               }, 600);
+           } catch(e) {
+               statusEl.innerHTML = `<span style="color: #f87171;">No barcode found. Try another photo.</span>`;
+           }
+        };
+        img.src = URL.createObjectURL(file);
+        
+      } catch (err) {
+        statusEl.innerHTML = `<span style="color: #f87171;">No barcode found. Try another photo.</span>`;
+      }
+    }
+
+    async function closeBarcodeScanner() {
+      const modal = document.getElementById('barcode-modal');
+      modal.classList.remove('open');
+      isScanning = false;
+      
+      // Wait for transition
+      setTimeout(() => {
+          modal.style.display = 'none';
+      }, 300);
+      
+      if (zxingReader) {
+        zxingReader.reset(); // Stops the camera feed
+      }
+    }
 
     // Initialize app
     loadState();

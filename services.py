@@ -1,55 +1,61 @@
-import json, os
-from groq import Groq
-from dotenv import load_dotenv
+"""Service layer — orchestrates the LLM router + nutrition database pipeline.
 
-load_dotenv()
+Flow: User text → LLM Router → Database Lookups (with cache) → Response
+The public interface (parse_food_service) returns the same schema as before:
+  {"items": [...], "total_added": N}
+"""
 
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+from llm import route_items
+from nutrition import resolve_calories
+from cache import get_cached, set_cache
 
 
 def parse_food_service(text: str):
-    prompt = f"""You are a nutrition expert specializing in Indian food and cuisine.
-The user ate: "{text}"
+    """Parse food input and return calorie data.
 
-Parse this into individual food items with quantities and estimate calories for each.
-Use Indian portion sizes, cooking methods, and regional context.
-
-Respond ONLY with valid JSON in this exact format:
-{{
-  "items": [
-    {{"item": "roti", "qty": 2, "calories_per_unit": 104}},
-    {{"item": "dal tadka", "qty": 1, "calories_per_unit": 198}}
-  ],
-  "identified": true
-}}
-
-If you cannot identify any food at all, respond with:
-{{"items": [], "identified": false}}
-
-Rules:
-- "item" must be a clean lowercase name
-- "qty" is a number, default 1 if not specified
-- "calories_per_unit" is calories for exactly ONE unit or serving
-- Do not include any explanation, only JSON
-"""
-
+    Returns the same schema as before:
+    {
+        "items": [{"item": str, "qty": int, "calories_per_unit": int}, ...],
+        "total_added": int
+    }
+    """
+    # Step 1: LLM parses and routes items
     try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            response_format={"type": "json_object"}
-        )
-        result = json.loads(response.choices[0].message.content)
+        routed_items = route_items(text)
     except Exception as e:
         raise Exception(f"LLM error: {str(e)}")
 
-    if not result.get("identified") or not result.get("items"):
+    if not routed_items:
         raise ValueError("Could not identify any food items. Please try again.")
 
-    total_added = sum(e["calories_per_unit"] * e["qty"] for e in result["items"])
+    # Step 2: Resolve calories per item (cache → DB → LLM fallback)
+    result_items = []
+    for item in routed_items:
+        original_name = item.normalized
+        
+        # Check cache first
+        cached = get_cached(original_name, item.route)
+        if cached is not None:
+            cal, cache_source, resolved_name = cached
+            source = f"{cache_source} (Cached)"
+            item.normalized = resolved_name
+        else:
+            # Look up from the appropriate database
+            cal, source = resolve_calories(item)
+            # Cache the result for future lookups using original name as key
+            if cal > 0:
+                set_cache(original_name, item.route, cal, source=source, resolved_name=item.normalized)
+
+        result_items.append({
+            "item": item.normalized,
+            "qty": item.qty,
+            "calories_per_unit": cal,
+            "source": source
+        })
+
+    total_added = sum(e["calories_per_unit"] * e["qty"] for e in result_items)
 
     return {
-        "items": result["items"],
+        "items": result_items,
         "total_added": round(total_added)
     }
