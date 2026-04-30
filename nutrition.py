@@ -123,7 +123,7 @@ def lookup_raw(item: RoutedItem) -> tuple[int, str]:
     # Try stripping common qualifiers
     simplified = item.normalized.lower()
     for word in ["raw", "fresh", "whole", "ripe", "green", "dry", "dried"]:
-        simplified = simplified.replace(word, "").strip()
+        simplified = re.sub(rf'\b{word}\b', '', simplified).strip()
     if simplified != item.normalized.lower():
         result = _search_ifct(simplified)
         if result is not None:

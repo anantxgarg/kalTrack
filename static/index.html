@@ -19,7 +19,18 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script>
-    const statePromise = fetch('/api/state').then(res => {
+    function getUserId() {
+      let uid = localStorage.getItem('kaltrack_uid');
+      if (!uid) {
+        uid = crypto.randomUUID();
+        localStorage.setItem('kaltrack_uid', uid);
+      }
+      return uid;
+    }
+
+    const statePromise = fetch('/api/state', {
+      headers: { 'X-User-ID': getUserId() }
+    }).then(res => {
       if (!res.ok) throw new Error('state fetch failed');
       return res.json();
     }).catch(e => {
@@ -746,11 +757,16 @@
     // ── Actions ───────────────────────────────────────────────────────────
     async function deleteEntry(id) {
       try {
-        await fetch(`/api/log/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/log/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-User-ID': getUserId() }
+        });
+        if (!res.ok) throw new Error('Delete failed');
         state.log = state.log.filter(item => item.id !== id);
         renderAll();
       } catch (e) {
         console.error('Delete failed:', e);
+        alert('Failed to delete item. Please try again.');
       }
     }
 
@@ -771,7 +787,10 @@
       try {
         const res  = await fetch('/log', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-ID': getUserId()
+          },
           body: JSON.stringify({ text })
         });
         const data = await res.json();
@@ -811,15 +830,20 @@
       const val = parseInt(document.getElementById('target-input').value);
       if (!val || val < 500) return;
       try {
-        await fetch('/api/target', {
+        const res = await fetch('/api/target', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-User-ID': getUserId()
+          },
           body: JSON.stringify({ target: val })
         });
+        if (!res.ok) throw new Error('Target update failed');
         state.target = val;
         renderAll();
       } catch (e) {
         console.error('Failed to update target:', e);
+        alert('Failed to update target. Please try again.');
       }
     }
 
@@ -827,9 +851,18 @@
       if (!confirm("Clear today's log?")) return;
       // Delete all today's entries from the DB
       const ids = [...state.log.map(i => i.id)];
-      await Promise.all(ids.map(id => fetch(`/api/log/${id}`, { method: 'DELETE' })));
-      state.log = [];
-      renderAll();
+      try {
+        const results = await Promise.all(ids.map(id => fetch(`/api/log/${id}`, {
+          method: 'DELETE',
+          headers: { 'X-User-ID': getUserId() }
+        })));
+        if (results.some(res => !res.ok)) throw new Error('Reset failed partially');
+        state.log = [];
+        renderAll();
+      } catch (e) {
+        console.error('Reset failed:', e);
+        alert('Failed to clear some items. Please refresh and try again.');
+      }
     }
 
     document.getElementById('food-input').addEventListener('keydown', e => {
