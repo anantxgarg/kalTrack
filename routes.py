@@ -11,12 +11,25 @@ router = APIRouter()
 ANON_USER_ID = "00000000-0000-0000-0000-000000000001"
 
 
+_user_ensured = False
+
 def _ensure_user():
-    """Upsert the anonymous user and their settings row."""
-    supabase.table("users").upsert({"id": ANON_USER_ID}).execute()
-    supabase.table("user_settings").upsert(
-        {"user_id": ANON_USER_ID, "daily_target": 2000},
-    ).execute()
+    """Ensure the anonymous user and their settings row exist."""
+    global _user_ensured
+    if _user_ensured:
+        return
+        
+    user_res = supabase.table("users").select("id").eq("id", ANON_USER_ID).execute()
+    if not user_res.data:
+        supabase.table("users").insert({"id": ANON_USER_ID}).execute()
+        
+    settings_res = supabase.table("user_settings").select("user_id").eq("user_id", ANON_USER_ID).execute()
+    if not settings_res.data:
+        supabase.table("user_settings").insert(
+            {"user_id": ANON_USER_ID, "daily_target": 2000}
+        ).execute()
+        
+    _user_ensured = True
 
 
 # ── Static ──────────────────────────────────────────────────────────────────

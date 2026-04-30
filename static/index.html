@@ -18,6 +18,15 @@
   <script src="https://unpkg.com/@zxing/library@latest"></script>
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const statePromise = fetch('/api/state').then(res => {
+      if (!res.ok) throw new Error('state fetch failed');
+      return res.json();
+    }).catch(e => {
+      console.error('Failed to load state from backend:', e);
+      return null;
+    });
+  </script>
   <style>
     * {
       box-sizing: border-box;
@@ -603,16 +612,11 @@
       // Discard any stale localStorage test data
       localStorage.removeItem('kaltrack_data');
 
-      try {
-        const res = await fetch('/api/state');
-        if (!res.ok) throw new Error('state fetch failed');
-        const data = await res.json();
-
+      const data = await statePromise;
+      if (data) {
         state.target  = data.target;
         state.log     = data.log;      // [{id, name, count, calories, source}, ...]
         state.history = data.history;  // {"YYYY-MM-DD": kcal}
-      } catch (e) {
-        console.error('Failed to load state from backend:', e);
       }
 
       document.getElementById('target-input').value = state.target;
