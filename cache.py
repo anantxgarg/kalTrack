@@ -1,39 +1,13 @@
-"""SQLite cache layer for nutrition lookups.
+"""Supabase cache layer for nutrition lookups.
 
 Prevents repeat API calls for the same food item.
-Cache persists across server restarts.
+Cache persists in Supabase DB.
 """
 
-import sqlite3
 import time
-import os
+from db import supabase
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data", "nutrition_cache.db")
 CACHE_TTL_SECONDS = 30 * 24 * 60 * 60  # 30 days
-
-
-def _get_conn():
-    """Get a SQLite connection, creating the table if needed."""
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        # Check if resolved_name column exists
-        conn.execute("SELECT resolved_name FROM nutrition_cache LIMIT 1")
-    except sqlite3.OperationalError:
-        # Recreate table if it's the old schema
-        conn.execute("DROP TABLE IF EXISTS nutrition_cache")
-        
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS nutrition_cache (
-            key TEXT PRIMARY KEY,
-            calories_per_unit INTEGER NOT NULL,
-            source TEXT NOT NULL,
-            resolved_name TEXT,
-            cached_at REAL NOT NULL
-        )
-    """)
-    conn.commit()
-    return conn
 
 
 def _make_key(name: str, route: str) -> str:
@@ -45,27 +19,25 @@ def get_cached(name: str, route: str) -> tuple[int, str, str] | None:
     """Look up cached calories. Returns (calories, source, resolved_name) if found, else None."""
     key = _make_key(name, route)
     try:
-        conn = _get_conn()
-        row = conn.execute(
-            "SELECT calories_per_unit, source, resolved_name, cached_at FROM nutrition_cache WHERE key = ?",
-            (key,)
-        ).fetchone()
-        conn.close()
-
-        if row is None:
+        response = supabase.table("nutrition_cache").select("*").eq("key", key).execute()
+        
+        if not response.data:
             return None
-
-        calories, source, resolved_name, cached_at = row
+            
+        row = response.data[0]
+        calories = row["calories_per_unit"]
+        source = row["source"]
+        resolved_name = row["resolved_name"]
+        cached_at = row["cached_at"]
+        
         if time.time() - cached_at > CACHE_TTL_SECONDS:
             # Expired — delete and return None
-            conn = _get_conn()
-            conn.execute("DELETE FROM nutrition_cache WHERE key = ?", (key,))
-            conn.commit()
-            conn.close()
+            supabase.table("nutrition_cache").delete().eq("key", key).execute()
             return None
 
         return calories, source, resolved_name
-    except Exception:
+    except Exception as e:
+        print(f"Cache read error: {e}")
         return None
 
 
@@ -75,13 +47,13 @@ def set_cache(name: str, route: str, calories: int, source: str = "unknown", res
     if resolved_name is None:
         resolved_name = name
     try:
-        conn = _get_conn()
-        conn.execute(
-            """INSERT OR REPLACE INTO nutrition_cache (key, calories_per_unit, source, resolved_name, cached_at)
-               VALUES (?, ?, ?, ?, ?)""",
-            (key, calories, source, resolved_name, time.time())
-        )
-        conn.commit()
-        conn.close()
-    except Exception:
+        supabase.table("nutrition_cache").upsert({
+            "key": key,
+            "calories_per_unit": calories,
+            "source": source,
+            "resolved_name": resolved_name,
+            "cached_at": time.time()
+        }).execute()
+    except Exception as e:
+        print(f"Cache write error: {e}")
         pass  # Cache failures should never break the app

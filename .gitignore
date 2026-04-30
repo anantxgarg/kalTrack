@@ -7,3 +7,4 @@ config.json
 .vscode
 data/nutrition_cache.db
 test*
+diff.txt

@@ -16,6 +16,8 @@
   <title>Calorie Tracker</title>
   <!-- ZXing for barcode scanning -->
   <script src="https://unpkg.com/@zxing/library@latest"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -113,6 +115,7 @@
 
     input[type="text"] {
       flex: 1;
+      min-width: 0;
       background: #1a1a1a;
       border: 1px solid #2a2a2a;
       border-radius: 12px;
@@ -268,6 +271,17 @@
       font-size: 0.9rem;
       text-align: center;
       padding: 32px 0;
+    }
+
+    /* --- Chart --- */
+    .chart-container {
+      margin-top: 32px;
+      margin-bottom: 32px;
+      background: #1a1a1a;
+      border-radius: 16px;
+      padding: 16px;
+      position: relative;
+      height: 250px;
     }
 
     .spinner {
@@ -528,8 +542,8 @@
   <!-- Input -->
   <div class="input-section">
     <div class="input-row">
+      <button class="scan-btn" id="scan-btn" onclick="openBarcodeScanner()" title="Scan barcode">📷</button>
       <input type="text" id="food-input" placeholder="e.g. 55 Samosas, Diet Coke" />
-      <button class="scan-btn" id="scan-btn" onclick="openBarcodeScanner()" title="Scan barcode">📷 Scan</button>
       <button class="submit-btn" id="submit-btn" onclick="logFood()">Add</button>
     </div>
     <div class="error-msg" id="error-msg"></div>
@@ -540,6 +554,12 @@
   <div class="log-header">Today's Log</div>
   <div class="log-list" id="log-list">
     <div class="empty-log">Nothing logged yet.</div>
+  </div>
+
+  <!-- Chart -->
+  <div class="log-header" style="margin-top: 32px;">Past 30 Days</div>
+  <div class="chart-container">
+    <canvas id="historyChart"></canvas>
   </div>
 
   <!-- Barcode scanner modal -->
@@ -571,119 +591,185 @@
   </div>
 
   <script>
-    const STORAGE_KEY = 'kaltrack_data';
-
+    // ── State ─────────────────────────────────────────────────────────────
     let state = {
-      date: new Date().toLocaleDateString(),
       target: 2000,
-      log: {}
+      log: [],       // array of {id, name, count, calories, source}
+      history: {}    // { "YYYY-MM-DD": totalKcal }
     };
 
-    function loadState() {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Reset log if it's a new day, but keep target
-        if (parsed.date !== new Date().toLocaleDateString()) {
-          parsed.date = new Date().toLocaleDateString();
-          parsed.log = {};
-        }
-        state = parsed;
+    // ── Bootstrap ─────────────────────────────────────────────────────────
+    async function loadState() {
+      // Discard any stale localStorage test data
+      localStorage.removeItem('kaltrack_data');
+
+      try {
+        const res = await fetch('/api/state');
+        if (!res.ok) throw new Error('state fetch failed');
+        const data = await res.json();
+
+        state.target  = data.target;
+        state.log     = data.log;      // [{id, name, count, calories, source}, ...]
+        state.history = data.history;  // {"YYYY-MM-DD": kcal}
+      } catch (e) {
+        console.error('Failed to load state from backend:', e);
       }
+
       document.getElementById('target-input').value = state.target;
       renderAll();
     }
 
-    function saveState() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    }
-
+    // ── Render ────────────────────────────────────────────────────────────
     function renderAll() {
-      const totalConsumed = Object.values(state.log).reduce((sum, item) => sum + (item.calories * item.count), 0);
+      const totalConsumed = state.log.reduce((sum, item) => sum + item.calories * item.count, 0);
       renderCounter(totalConsumed, state.target);
       renderLog(state.log);
+      renderChart(totalConsumed);
+    }
+
+    let historyChartInstance = null;
+
+    function renderChart(todayTotal) {
+      const ctx = document.getElementById('historyChart').getContext('2d');
+
+      const labels = [];
+      const data   = [];
+
+      const today = new Date();
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        // YYYY-MM-DD format to match backend ISO dates
+        const dateStr = d.toISOString().split('T')[0];
+        const label   = `${d.getMonth() + 1}/${d.getDate()}`;
+        labels.push(label);
+        data.push(i === 0 ? todayTotal : (state.history[dateStr] || 0));
+      }
+
+      if (historyChartInstance) {
+        historyChartInstance.data.labels            = labels;
+        historyChartInstance.data.datasets[0].data  = data;
+        historyChartInstance.data.datasets[1].data  = Array(30).fill(state.target);
+        historyChartInstance.update();
+      } else {
+        Chart.defaults.color = '#888';
+        historyChartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              {
+                label: 'Calories',
+                data,
+                borderColor: '#4ade80',
+                backgroundColor: 'rgba(74, 222, 128, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 2,
+                pointHoverRadius: 5
+              },
+              {
+                label: 'Target',
+                data: Array(30).fill(state.target),
+                borderColor: '#555',
+                borderWidth: 1,
+                borderDash: [5, 5],
+                fill: false,
+                pointRadius: 0
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+              tooltip: { mode: 'index', intersect: false }
+            },
+            scales: {
+              x: { grid: { color: '#2a2a2a' }, ticks: { maxTicksLimit: 6 } },
+              y: { beginAtZero: true, grid: { color: '#2a2a2a' } }
+            }
+          }
+        });
+      }
     }
 
     function renderCounter(consumed, target) {
       document.getElementById('cal-consumed').textContent = consumed;
-      document.getElementById('cal-target').textContent = target;
+      document.getElementById('cal-target').textContent   = target;
 
       const remaining = target - consumed;
-      const label = document.getElementById('remaining-label');
-      label.textContent = remaining >= 0
+      document.getElementById('remaining-label').textContent = remaining >= 0
         ? `${remaining} kcal remaining`
         : `${Math.abs(remaining)} kcal over target`;
 
-      const pct = Math.min((consumed / target) * 100, 100);
+      const pct  = Math.min((consumed / target) * 100, 100);
       const fill = document.getElementById('progress-fill');
-      fill.style.width = pct + '%';
-      fill.className = 'progress-bar-fill';
-      if (consumed / target >= 1) fill.classList.add('over');
+      fill.style.width  = pct + '%';
+      fill.className    = 'progress-bar-fill';
+      if (consumed / target >= 1)    fill.classList.add('over');
       else if (consumed / target >= 0.85) fill.classList.add('warning');
     }
 
     function escapeHTML(str) {
-      return str.replace(/[&<>'"]/g,
-        tag => ({
-          '&': '&amp;',
-          '<': '&lt;',
-          '>': '&gt;',
-          "'": '&#39;',
-          '"': '&quot;'
-        }[tag] || tag)
-      );
+      return String(str).replace(/[&<>'"]/g, tag => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+      }[tag] || tag));
     }
 
     function renderLog(log) {
       const list = document.getElementById('log-list');
-      const entries = Object.entries(log);
-
-      if (entries.length === 0) {
+      if (!log.length) {
         list.innerHTML = '<div class="empty-log">Nothing logged yet.</div>';
         return;
       }
-
-      list.innerHTML = entries.map(([name, val]) => `
-        <div class="log-item">
+      list.innerHTML = log.map(item => `
+        <div class="log-item" data-id="${escapeHTML(item.id)}">
           <div>
-            <div class="log-item-name">${escapeHTML(name)}</div>
-            <div class="log-item-count">× ${val.count} · ${val.calories} kcal each</div>
+            <div class="log-item-name">${escapeHTML(item.name)}</div>
+            <div class="log-item-count">× ${item.count} · ${item.calories} kcal each</div>
           </div>
           <div class="log-item-right">
-            <div class="log-item-cal">${val.calories * val.count} kcal</div>
-            <button class="delete-btn" onclick="deleteEntry('${escapeHTML(name)}')" title="Remove">✕</button>
+            <div class="log-item-cal">${item.calories * item.count} kcal</div>
+            <button class="delete-btn" onclick="deleteEntry('${escapeHTML(item.id)}')" title="Remove">✕</button>
           </div>
         </div>
       `).join('');
     }
 
-    function deleteEntry(name) {
-      delete state.log[name];
-      saveState();
-      renderAll();
+    // ── Actions ───────────────────────────────────────────────────────────
+    async function deleteEntry(id) {
+      try {
+        await fetch(`/api/log/${id}`, { method: 'DELETE' });
+        state.log = state.log.filter(item => item.id !== id);
+        renderAll();
+      } catch (e) {
+        console.error('Delete failed:', e);
+      }
     }
 
     async function logFood() {
-      const input = document.getElementById('food-input');
-      const text = input.value.trim();
+      const input    = document.getElementById('food-input');
+      const text     = input.value.trim();
       if (!text) return;
 
-      const btn = document.getElementById('submit-btn');
-      const errorEl = document.getElementById('error-msg');
+      const btn       = document.getElementById('submit-btn');
+      const errorEl   = document.getElementById('error-msg');
       const successEl = document.getElementById('success-msg');
 
-      errorEl.textContent = '';
+      errorEl.textContent   = '';
       successEl.textContent = '';
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>';
+      btn.disabled          = true;
+      btn.innerHTML         = '<span class="spinner"></span>';
 
       try {
-        const res = await fetch('/log', {
+        const res  = await fetch('/log', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text })
         });
-
         const data = await res.json();
 
         if (!res.ok) {
@@ -693,24 +779,21 @@
 
         input.value = '';
 
-        // Append parsed items to local state
+        // Append items (backend now includes DB-generated id)
         for (const item of data.items) {
-          const name = item.item;
-          if (state.log[name]) {
-            state.log[name].count += item.qty;
-          } else {
-            state.log[name] = { count: item.qty, calories: item.calories_per_unit, source: item.source };
-          }
+          state.log.push({
+            id:       item.id,
+            name:     item.item,
+            count:    item.qty,
+            calories: item.calories_per_unit,
+            source:   item.source
+          });
         }
 
-        saveState();
         renderAll();
 
-        const itemNames = data.items.map(i => {
-            const sourceInfo = i.source ? ` [${i.source}]` : '';
-            return `${i.item} (${i.calories_per_unit * i.qty} kcal)${sourceInfo}`;
-        }).join(', ');
-        successEl.textContent = `+${data.total_added} kcal — ${itemNames}`;
+        successEl.textContent = `+${data.total_added} kcal — ` +
+          data.items.map(i => `${i.item} (${i.calories_per_unit * i.qty} kcal)`).join(', ');
 
       } catch (e) {
         errorEl.textContent = 'Network error. Is the server running?';
@@ -720,18 +803,28 @@
       }
     }
 
-    function updateTarget() {
+    async function updateTarget() {
       const val = parseInt(document.getElementById('target-input').value);
       if (!val || val < 500) return;
-      state.target = val;
-      saveState();
-      renderAll();
+      try {
+        await fetch('/api/target', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: val })
+        });
+        state.target = val;
+        renderAll();
+      } catch (e) {
+        console.error('Failed to update target:', e);
+      }
     }
 
-    function resetToday() {
-      if (!confirm('Clear today\'s log?')) return;
-      state.log = {};
-      saveState();
+    async function resetToday() {
+      if (!confirm("Clear today's log?")) return;
+      // Delete all today's entries from the DB
+      const ids = [...state.log.map(i => i.id)];
+      await Promise.all(ids.map(id => fetch(`/api/log/${id}`, { method: 'DELETE' })));
+      state.log = [];
       renderAll();
     }
 
