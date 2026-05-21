@@ -2,6 +2,7 @@
   "name": "Calorie Tracker",
   "short_name": "Kal Track",
   "description": "Track your daily calorie intake",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

@@ -115,6 +115,11 @@ def _search_ifct(query: str) -> int | None:
 
 def lookup_raw(item: RoutedItem) -> tuple[int, str]:
     """Look up raw ingredient: IFCT 2017 CSV → LLM Fallback."""
+    from admin_config import is_ifct_disabled
+    if is_ifct_disabled():
+        print(f"Admin Config: IFCT lookup disabled. Directing '{item.normalized}' to LLM estimate.")
+        return llm_estimate(item)
+
     # 1. IFCT 2017 in-memory search
     result = _search_ifct(item.normalized)
     if result is not None:

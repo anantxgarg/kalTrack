@@ -1,8 +1,8 @@
-const CACHE_NAME = 'cal-tracker-v1';
+const CACHE_NAME = 'cal-tracker-v2';
 const urlsToCache = [
   '/',
   '/static/index.html',
-  '/static/manifest.json',
+  '/manifest.json',
   '/static/icon-192.png',
   '/static/icon-512.png'
 ];

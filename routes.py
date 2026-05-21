@@ -37,6 +37,14 @@ def index():
 def head_root():
     return {}
 
+@router.get("/sw.js")
+def get_sw():
+    return FileResponse("static/sw.js")
+
+@router.get("/manifest.json")
+def get_manifest():
+    return FileResponse("static/manifest.json")
+
 
 # ── State ───────────────────────────────────────────────────────────────────
 
@@ -122,23 +130,37 @@ def log_food(req: LogRequest, x_user_id: str = Header(...)):
         raise HTTPException(status_code=500, detail="An internal service error occurred. Please try again later.")
 
     today_str = date.today().isoformat()
-    rows_to_insert = [
-        {
-            "user_id": x_user_id,
-            "log_date": today_str,
-            "food_name": item["item"],
-            "count": item["qty"],
-            "calories_per_unit": item["calories_per_unit"],
-            "source": item.get("source"),
-        }
-        for item in result["items"]
-    ]
-
-    inserted = supabase.table("food_logs").insert(rows_to_insert).execute()
-
-    # Attach DB-generated UUIDs so the frontend can delete by id
-    for item, row in zip(result["items"], inserted.data):
-        item["id"] = row["id"]
+    
+    # Fetch existing logs for today
+    existing_logs = supabase.table("food_logs").select("id, food_name, count").eq("user_id", x_user_id).eq("log_date", today_str).execute()
+    existing_map = {row["food_name"].lower(): row for row in existing_logs.data}
+    
+    for item in result["items"]:
+        food_name_lower = item["item"].lower()
+        if food_name_lower in existing_map:
+            # Update existing row
+            existing_row = existing_map[food_name_lower]
+            new_count = existing_row["count"] + item["qty"]
+            supabase.table("food_logs").update({"count": new_count}).eq("id", existing_row["id"]).execute()
+            
+            item["id"] = existing_row["id"]
+            item["action"] = "updated"
+            item["new_count"] = new_count
+            existing_row["count"] = new_count
+        else:
+            # Insert new row
+            inserted = supabase.table("food_logs").insert({
+                "user_id": x_user_id,
+                "log_date": today_str,
+                "food_name": item["item"],
+                "count": item["qty"],
+                "calories_per_unit": item["calories_per_unit"],
+                "source": item.get("source"),
+            }).execute()
+            
+            item["id"] = inserted.data[0]["id"]
+            item["action"] = "inserted"
+            existing_map[food_name_lower] = {"id": item["id"], "count": item["qty"], "food_name": item["item"]}
 
     return result
 
@@ -152,3 +174,59 @@ def delete_log(log_id: str, x_user_id: str = Header(...)):
         "user_id", x_user_id
     ).execute()
     return {"deleted": log_id}
+
+
+# ── Admin Settings ──────────────────────────────────────────────────────────
+
+@router.get("/api/admin/settings")
+def get_admin_settings(x_admin_password: str = Header(...)):
+    """Retrieve the current admin/system configuration settings."""
+    import os
+    from admin_config import get_admin_config
+    
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if not admin_password:
+        raise HTTPException(status_code=500, detail="Admin password not configured on server")
+    import secrets
+    if not secrets.compare_digest(x_admin_password, admin_password):
+        raise HTTPException(status_code=401, detail="Invalid admin password")
+    
+    return get_admin_config()
+
+
+@router.post("/api/admin/settings")
+def update_admin_settings(settings: dict, x_admin_password: str = Header(...)):
+    """Update global system configurations (e.g. toggle IFCT)."""
+    import os
+    from admin_config import get_admin_config, set_admin_config
+    
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if not admin_password:
+        raise HTTPException(status_code=500, detail="Admin password not configured on server")
+    import secrets
+    if not secrets.compare_digest(x_admin_password, admin_password):
+        raise HTTPException(status_code=401, detail="Invalid admin password")
+    
+    current_config = get_admin_config()
+    current_config["disable_ifct"] = settings.get("disable_ifct", False)
+    set_admin_config(current_config)
+    return current_config
+
+
+@router.post("/api/admin/clear-cache")
+def clear_cache(x_admin_password: str = Header(...)):
+    """Clear all records from the nutrition cache table in Supabase."""
+    import os
+    
+    admin_password = os.environ.get("ADMIN_PASSWORD")
+    if not admin_password:
+        raise HTTPException(status_code=500, detail="Admin password not configured on server")
+    import secrets
+    if not secrets.compare_digest(x_admin_password, admin_password):
+        raise HTTPException(status_code=401, detail="Invalid admin password")
+    
+    try:
+        supabase.table("nutrition_cache").delete().neq("key", "").execute()
+        return {"success": True, "message": "Nutrition cache cleared successfully."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear cache: {str(e)}")

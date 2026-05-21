@@ -6,5 +6,7 @@ data.json
 config.json
 .vscode
 data/nutrition_cache.db
+data/a*
 test*
 diff.txt
+todo.md

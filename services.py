@@ -37,6 +37,12 @@ def parse_food_service(text: str):
         cached = get_cached(original_name, item.route)
         if cached is not None:
             cal, cache_source, resolved_name = cached
+            from admin_config import is_ifct_disabled
+            if is_ifct_disabled() and "IFCT" in cache_source:
+                cached = None
+                
+        if cached is not None:
+            cal, cache_source, resolved_name = cached
             source = f"{cache_source} (Cached)"
             item.normalized = resolved_name
         else:
